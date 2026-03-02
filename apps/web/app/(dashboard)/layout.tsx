@@ -1,21 +1,102 @@
+"use client";
+
 import type { PropsWithChildren } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const navLinks = [
+  { href: "/dashboard" as const, label: "Dashboard", icon: "◻" },
+  { href: "/upload" as const, label: "New Interview", icon: "+" },
+  { href: "/report/demo" as const, label: "Demo Report", icon: "◈" }
+];
 
 export default function DashboardLayout({ children }: PropsWithChildren) {
+  const pathname = usePathname();
+
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-4 py-6 md:px-6">
-      <header className="mb-6 flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur-xl">
-        <Link href="/" className="text-sm font-semibold tracking-wide text-indigo-300">
-          RecruitAI Console
-        </Link>
-        <nav className="flex items-center gap-4 text-sm text-zinc-300">
-          <Link href="/dashboard">Dashboard</Link>
-          <Link href="/upload">Upload</Link>
-          <Link href="/interview/demo">Interview</Link>
-          <Link href="/report/demo">Report</Link>
+    <div className="flex min-h-dvh bg-interview">
+      {/* Sidebar */}
+      <aside className="hidden w-[220px] shrink-0 flex-col border-r border-white/[0.06] bg-white/[0.02] md:flex">
+        <div className="flex items-center gap-2.5 px-5 py-5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-400">
+            <span className="text-xs font-bold text-white">R</span>
+          </div>
+          <span className="text-sm font-semibold text-zinc-100">RecruitAI</span>
+        </div>
+
+        <nav className="flex flex-col gap-0.5 px-3 py-2">
+          {navLinks.map((link) => {
+            const isActive = pathname === link.href || pathname.startsWith(link.href + "/");
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-all duration-150 ${
+                  isActive
+                    ? "bg-white/[0.08] text-white font-medium"
+                    : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200"
+                }`}
+              >
+                <span className="text-xs opacity-60">{link.icon}</span>
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
-      </header>
-      {children}
-    </main>
+
+        <div className="mt-auto border-t border-white/[0.06] px-5 py-4">
+          <p className="text-[10px] uppercase tracking-wider text-zinc-500">RecruitAI v1.0</p>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Top bar */}
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] bg-white/[0.01] px-5">
+          {/* Mobile logo */}
+          <div className="flex items-center gap-2.5 md:hidden">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-400">
+              <span className="text-xs font-bold text-white">R</span>
+            </div>
+          </div>
+
+          <div className="hidden text-sm text-zinc-400 md:block">
+            {pathname.includes("/interview/") && "Interview Session"}
+            {pathname.includes("/report/") && "Report"}
+            {pathname.includes("/upload") && "Upload Resume"}
+            {pathname === "/dashboard" && "All Sessions"}
+          </div>
+
+          {/* Mobile nav */}
+          <nav className="flex items-center gap-3 text-sm md:hidden">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`px-2 py-1 text-xs transition ${
+                  pathname === link.href ? "text-white" : "text-zinc-500"
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5">
+              <span className="status-dot status-dot-live" />
+              <span className="text-xs text-zinc-300">System Online</span>
+            </div>
+          </div>
+        </header>
+
+        {/* Page content */}
+        <main className="flex-1 overflow-y-auto p-5 md:p-6 lg:p-8">
+          <div className="mx-auto max-w-6xl">
+            {children}
+          </div>
+        </main>
+      </div>
+    </div>
   );
 }
