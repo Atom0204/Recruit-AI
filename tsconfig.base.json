@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "@recruitai/shared": ["packages/shared/src/index.ts"],
+      "@recruitai/shared/*": ["packages/shared/src/*"],
+      "@recruitai/ai-service": ["packages/ai-service/src/index.ts"],
+      "@recruitai/ai-service/*": ["packages/ai-service/src/*"],
+      "@recruitai/db-service": ["packages/db-service/src/index.ts"],
+      "@recruitai/db-service/*": ["packages/db-service/src/*"],
+      "@recruitai/proctoring-service": ["packages/proctoring-service/src/index.ts"],
+      "@recruitai/proctoring-service/*": ["packages/proctoring-service/src/*"]
+    }
+  }
+}
