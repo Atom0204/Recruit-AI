@@ -1,3 +1,0 @@
--- Optional demo seed. Replace USER_ID with real auth user UUID.
--- INSERT INTO candidates (user_id, name, email, parsed_resume)
--- VALUES ('USER_ID', 'Demo Candidate', 'demo@candidate.dev', '{"confidence":0.9}');

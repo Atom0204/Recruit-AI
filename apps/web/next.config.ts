@@ -5,9 +5,9 @@ const nextConfig: NextConfig = {
   transpilePackages: [
     "@recruitai/shared",
     "@recruitai/ai-service",
-    "@recruitai/db-service",
     "@recruitai/proctoring-service"
-  ]
+  ],
+  serverExternalPackages: ["pdf-parse"],
 };
 
 export default nextConfig;

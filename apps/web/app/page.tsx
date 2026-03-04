@@ -6,6 +6,11 @@ import { Button } from "../components/ui/button";
 
 const features = [
   {
+    icon: "⚡",
+    title: "Quick Interview",
+    desc: "Pick a topic, answer 10 fundamental questions, and get instant AI-powered scoring with beautiful animations."
+  },
+  {
     icon: "🎙️",
     title: "Voice-First Interview",
     desc: "Two-way voice conversation powered by AI. Natural, adaptive questioning just like a real recruiter."
@@ -54,10 +59,11 @@ export default function HomePage() {
           <span className="text-base font-semibold text-zinc-100">RecruitAI</span>
         </div>
         <nav className="hidden items-center gap-6 text-sm text-zinc-400 md:flex">
-          <Link href="/upload" className="transition hover:text-zinc-100">Start Interview</Link>
+          <Link href="/quick-interview" className="transition hover:text-zinc-100">Quick Interview</Link>
+          <Link href="/upload" className="transition hover:text-zinc-100">Full Interview</Link>
           <Link href="/dashboard" className="transition hover:text-zinc-100">Dashboard</Link>
         </nav>
-        <Link href="/upload">
+        <Link href="/quick-interview">
           <Button size="sm">Get Started</Button>
         </Link>
       </header>
@@ -105,16 +111,16 @@ export default function HomePage() {
           transition={{ delay: 0.45, duration: 0.5 }}
           className="mt-8 flex flex-wrap items-center justify-center gap-3"
         >
-          <Link href="/upload">
+          <Link href="/quick-interview">
             <Button size="lg">
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              Start New Interview
+              Quick Interview
             </Button>
           </Link>
-          <Link href="/dashboard">
-            <Button variant="secondary" size="lg">View Dashboard</Button>
+          <Link href="/upload">
+            <Button variant="secondary" size="lg">Full Interview</Button>
           </Link>
         </motion.div>
 
@@ -123,7 +129,7 @@ export default function HomePage() {
           variants={stagger}
           initial="hidden"
           animate="show"
-          className="mt-20 grid gap-4 text-left md:grid-cols-2 lg:grid-cols-4"
+          className="mt-20 grid gap-4 text-left md:grid-cols-2 lg:grid-cols-5"
         >
           {features.map((feature) => (
             <motion.div

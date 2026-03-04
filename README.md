@@ -1,6 +1,6 @@
 # RecruitAI
 
-AI-driven resume-to-interview system scaffold built with Next.js, TypeScript, Turborepo, and Supabase-ready SQL.
+AI-driven resume-to-interview system scaffold built with Next.js, TypeScript, and Turborepo.
 
 ## Quick Start
 
@@ -18,9 +18,7 @@ AI-driven resume-to-interview system scaffold built with Next.js, TypeScript, Tu
 - `apps/web`: Next.js App Router UI + API routes
 - `packages/shared`: shared strict types and constants
 - `packages/ai-service`: resume parser/JD/interviewer/report service stubs
-- `packages/db-service`: Supabase client + query layer stubs
 - `packages/proctoring-service`: proctoring engines and event generation
-- `supabase`: schema + migration starter SQL
 
 ## Notes
 

@@ -12,13 +12,14 @@
     "format": "echo 'No formatter configured yet for web'"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@monaco-editor/react": "^4.7.0",
     "@recruitai/ai-service": "workspace:*",
-    "@recruitai/db-service": "workspace:*",
     "@recruitai/proctoring-service": "workspace:*",
     "@recruitai/shared": "workspace:*",
     "framer-motion": "^11.11.9",
     "next": "^15.1.0",
+    "pdf-parse": "^2.4.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-pdf": "^9.2.1",
@@ -27,6 +28,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.1",
+    "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "autoprefixer": "^10.4.20",
