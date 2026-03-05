@@ -1,7 +1,8 @@
 import type { ProctoringEvent, TranscriptEntry } from "@recruitai/shared";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { completeInterviewSession } from "../../../../../lib/interview-memory-store";
+import { getUserIdFromRequest } from "../../../../../lib/auth";
 
 interface ParamsContext {
   params: Promise<{ id: string }>;
@@ -25,7 +26,12 @@ const payloadSchema = z.object({
   )
 });
 
-export async function POST(request: Request, context: ParamsContext): Promise<NextResponse> {
+export async function POST(request: NextRequest, context: ParamsContext): Promise<NextResponse> {
+  const userId = getUserIdFromRequest(request);
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { id } = await context.params;
   const body = await request.json().catch(() => null);
   const parsed = payloadSchema.safeParse(body);
@@ -36,7 +42,7 @@ export async function POST(request: Request, context: ParamsContext): Promise<Ne
 
   const transcript = parsed.data.transcript as TranscriptEntry[];
   const proctoringLog = parsed.data.proctoringLog as ProctoringEvent[];
-  const session = await completeInterviewSession(id, transcript, proctoringLog);
+  const session = await completeInterviewSession(id, userId, transcript, proctoringLog);
 
   if (!session || !session.reportReadyAt) {
     return NextResponse.json({ error: "Interview not found" }, { status: 404 });

@@ -9,6 +9,7 @@ import type {
 
 interface InterviewSession {
   id: string;
+  userId: string;
   candidateName: string;
   role: string;
   resume: ParsedResume;
@@ -154,6 +155,7 @@ const calculateCategoryScore = (
 };
 
 export const createInterviewSession = async (
+  userId: string,
   resume: ParsedResume,
   shadowJd: ShadowJobDescription
 ): Promise<InterviewSession> => {
@@ -164,6 +166,7 @@ export const createInterviewSession = async (
 
   const session: InterviewSession = {
     id,
+    userId,
     candidateName: resume.candidate.name,
     role: shadowJd.title,
     resume,
@@ -184,15 +187,25 @@ export const getInterviewSession = (id: string): InterviewSession | null => {
   return getStore().get(id) ?? null;
 };
 
+export const getInterviewSessionForUser = (id: string, userId: string): InterviewSession | null => {
+  const session = getStore().get(id) ?? null;
+  if (!session || session.userId !== userId) {
+    return null;
+  }
+
+  return session;
+};
+
 export const completeInterviewSession = async (
   id: string,
+  userId: string,
   transcript: TranscriptEntry[],
   proctoringLog: ProctoringEvent[]
 ): Promise<InterviewSession | null> => {
   const { generateCandidateReport } = await import("@recruitai/ai-service");
   const session = getStore().get(id);
 
-  if (!session) {
+  if (!session || session.userId !== userId) {
     return null;
   }
 
@@ -232,14 +245,15 @@ export const completeInterviewSession = async (
 };
 
 export const getReportStatus = (
-  interviewId: string
+  interviewId: string,
+  userId: string
 ):
   | { status: "missing" }
   | { status: "processing"; reportReadyAt: string }
   | { status: "ready"; report: CandidateFitReport; reportReadyAt: string } => {
   const session = getStore().get(interviewId);
 
-  if (!session || !session.report || !session.reportReadyAt) {
+  if (!session || session.userId !== userId || !session.report || !session.reportReadyAt) {
     return { status: "missing" };
   }
 
@@ -257,8 +271,9 @@ export const getReportStatus = (
   };
 };
 
-export const listDashboardReportItems = (): DashboardReportItem[] => {
+export const listDashboardReportItems = (userId: string): DashboardReportItem[] => {
   return Array.from(getStore().values())
+    .filter((session) => session.userId === userId)
     .map((session) => {
       if (session.status === "in_progress") {
         return {
@@ -270,7 +285,7 @@ export const listDashboardReportItems = (): DashboardReportItem[] => {
         } satisfies DashboardReportItem;
       }
 
-      const reportStatus = getReportStatus(session.id);
+      const reportStatus = getReportStatus(session.id, userId);
       if (reportStatus.status === "ready") {
         return {
           interviewId: session.id,

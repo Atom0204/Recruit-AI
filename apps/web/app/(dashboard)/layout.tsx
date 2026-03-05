@@ -2,7 +2,9 @@
 
 import type { PropsWithChildren } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Button } from "../../components/ui/button";
 
 const navLinks = [
   { href: "/dashboard" as const, label: "Dashboard", icon: "◻" },
@@ -14,6 +16,38 @@ const navLinks = [
 
 export default function DashboardLayout({ children }: PropsWithChildren) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [userName, setUserName] = useState<string>("User");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadMe = async () => {
+      const response = await fetch("/api/auth/me", { cache: "no-store" });
+      if (!response.ok) {
+        if (!cancelled) {
+          router.replace("/login");
+        }
+        return;
+      }
+
+      const data = (await response.json()) as { user: { name: string } };
+      if (!cancelled && data.user?.name) {
+        setUserName(data.user.name);
+      }
+    };
+
+    void loadMe();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  };
 
   return (
     <div className="flex min-h-dvh bg-interview">
@@ -90,6 +124,10 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
             <div className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5">
               <span className="status-dot status-dot-live" />
               <span className="text-xs text-zinc-300">System Online</span>
+            </div>
+            <div className="hidden items-center gap-2 md:flex">
+              <span className="text-xs text-zinc-400">{userName}</span>
+              <Button size="sm" variant="secondary" onClick={handleLogout}>Logout</Button>
             </div>
           </div>
         </header>
