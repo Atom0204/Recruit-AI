@@ -2,12 +2,13 @@
 
 import { decideBranch } from "@recruitai/ai-service";
 import { createTabSwitchEvent } from "@recruitai/proctoring-service";
-import type { CandidateResponse, InterviewQuestion, InterviewState, ProctoringEvent, TranscriptEntry } from "@recruitai/shared";
+import type { CandidateResponse, InterviewQuestion, InterviewState, ProctoringEvent, TranscriptEntry, CodingChallenge } from "@recruitai/shared";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../ui/button";
 import { useInterviewTimer } from "../../hooks/use-interview-timer";
+import { CodingQuestionRenderer } from "./coding-question-renderer";
 
 interface InterviewRoomProps {
   interviewId: string;
@@ -124,6 +125,7 @@ export function InterviewRoom({ interviewId, candidateName, role, questions }: I
   const [fatalViolation, setFatalViolation] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [voicesReady, setVoicesReady] = useState(false);
+  const [codingChallenges, setCodingChallenges] = useState<CodingChallenge[]>([]);
   const { elapsedSeconds, remainingSeconds } = useInterviewTimer(45 * 60);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const askedAtRef = useRef<number>(Date.now());
@@ -556,79 +558,97 @@ export function InterviewRoom({ interviewId, candidateName, role, questions }: I
           </div>
         </div>
 
-        {/* Right sidebar: current Q + transcript + answer */}
+        {/* Right sidebar: current Q + transcript + answer OR coding challenge */}
         <div className="hidden w-[360px] shrink-0 flex-col border-l border-white/[0.06] bg-white/[0.01] lg:flex">
-          {/* Current question */}
-          <div className="shrink-0 border-b border-white/[0.06] p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] uppercase tracking-wider text-indigo-400">Current Question</p>
-              <span className="text-[10px] text-zinc-500">Q{currentQuestionIndex + 1}/{questions.length}</span>
-            </div>
-            <p className="mt-2 text-sm leading-relaxed text-zinc-200">{currentQuestion?.prompt ?? "No question available."}</p>
-
-            {lastBranchMessage && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                className="mt-2 rounded-lg bg-indigo-500/[0.08] px-2.5 py-1.5"
-              >
-                <p className="text-[11px] text-indigo-300">⚡ {lastBranchMessage}</p>
-              </motion.div>
-            )}
-          </div>
-
-          {/* Transcript */}
-          <div className="flex-1 overflow-y-auto scroll-fade p-4">
-            <p className="mb-3 text-[10px] uppercase tracking-wider text-zinc-500">Live Transcript</p>
-            {transcript.length === 0 && (
-              <p className="text-xs text-zinc-500">Interview will begin shortly...</p>
-            )}
-            <div className="space-y-2.5">
-              {transcript.map((entry, index) => (
-                <motion.div
-                  key={`${entry.timestamp}-${index}`}
-                  initial={{ opacity: 0, x: entry.speaker === "AI" ? -8 : 8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.25 }}
-                  className={`rounded-xl px-3 py-2 text-xs leading-relaxed ${
-                    entry.speaker === "AI"
-                      ? "bg-indigo-500/[0.08] text-zinc-200"
-                      : "bg-emerald-500/[0.06] text-zinc-200"
-                  }`}
-                >
-                  <span className={`font-medium ${entry.speaker === "AI" ? "text-indigo-400" : "text-emerald-400"}`}>
-                    {entry.speaker === "AI" ? "Interviewer" : "You"}
-                  </span>
-                  <p className="mt-0.5">{entry.text}</p>
-                </motion.div>
-              ))}
-              <div ref={transcriptEndRef} />
-            </div>
-          </div>
-
-          {/* Answer input */}
-          <div className="shrink-0 border-t border-white/[0.06] p-4">
-            <div className="relative">
-              <textarea
-                value={candidateDraft}
-                onChange={(e) => setCandidateDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitAnswer(); }
-                }}
-                placeholder={isListening ? "Listening to your voice..." : "Type your answer or use voice..."}
-                className="h-20 w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 pr-10 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-500 focus:border-indigo-500/40 focus:ring-1 focus:ring-indigo-500/20"
-              />
-              {isListening && (
-                <div className="absolute right-3 top-3">
-                  <span className="relative flex h-3 w-3">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" />
-                  </span>
+          {/* Check if current question is a coding challenge */}
+          {(currentQuestion?.type === "coding") && codingChallenges.length > 0 && codingChallenges[0] ? (
+            // Coding Challenge Renderer
+            <CodingQuestionRenderer
+              challenge={codingChallenges[0]}
+              onComplete={(result) => {
+                // Log the coding result
+                console.log("Coding challenge completed:", result);
+                submitAnswer(); // Move to next question
+              }}
+              onSkip={submitAnswer}
+              timeRemaining={remainingSeconds}
+            />
+          ) : (
+            // Regular Q&A Interface
+            <>
+              {/* Current question */}
+              <div className="shrink-0 border-b border-white/[0.06] p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] uppercase tracking-wider text-indigo-400">Current Question</p>
+                  <span className="text-[10px] text-zinc-500">Q{currentQuestionIndex + 1}/{questions.length}</span>
                 </div>
-              )}
-            </div>
-            <p className="mt-1.5 text-[10px] text-zinc-500">Press Enter to submit · Shift+Enter for new line</p>
-          </div>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-200">{currentQuestion?.prompt ?? "No question available."}</p>
+
+                {lastBranchMessage && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    className="mt-2 rounded-lg bg-indigo-500/[0.08] px-2.5 py-1.5"
+                  >
+                    <p className="text-[11px] text-indigo-300">⚡ {lastBranchMessage}</p>
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Transcript */}
+              <div className="flex-1 overflow-y-auto scroll-fade p-4">
+                <p className="mb-3 text-[10px] uppercase tracking-wider text-zinc-500">Live Transcript</p>
+                {transcript.length === 0 && (
+                  <p className="text-xs text-zinc-500">Interview will begin shortly...</p>
+                )}
+                <div className="space-y-2.5">
+                  {transcript.map((entry, index) => (
+                    <motion.div
+                      key={`${entry.timestamp}-${index}`}
+                      initial={{ opacity: 0, x: entry.speaker === "AI" ? -8 : 8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.25 }}
+                      className={`rounded-xl px-3 py-2 text-xs leading-relaxed ${
+                        entry.speaker === "AI"
+                          ? "bg-indigo-500/[0.08] text-zinc-200"
+                          : "bg-emerald-500/[0.06] text-zinc-200"
+                      }`}
+                    >
+                      <span className={`font-medium ${entry.speaker === "AI" ? "text-indigo-400" : "text-emerald-400"}`}>
+                        {entry.speaker === "AI" ? "Interviewer" : "You"}
+                      </span>
+                      <p className="mt-0.5">{entry.text}</p>
+                    </motion.div>
+                  ))}
+                  <div ref={transcriptEndRef} />
+                </div>
+              </div>
+
+              {/* Answer input */}
+              <div className="shrink-0 border-t border-white/[0.06] p-4">
+                <div className="relative">
+                  <textarea
+                    value={candidateDraft}
+                    onChange={(e) => setCandidateDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitAnswer(); }
+                    }}
+                    placeholder={isListening ? "Listening to your voice..." : "Type your answer or use voice..."}
+                    className="h-20 w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 pr-10 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-500 focus:border-indigo-500/40 focus:ring-1 focus:ring-indigo-500/20"
+                  />
+                  {isListening && (
+                    <div className="absolute right-3 top-3">
+                      <span className="relative flex h-3 w-3">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" />
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <p className="mt-1.5 text-[10px] text-zinc-500">Press Enter to submit · Shift+Enter for new line</p>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

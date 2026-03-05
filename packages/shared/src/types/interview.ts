@@ -4,7 +4,8 @@ export type InterviewQuestionType =
   | "system_design"
   | "problem_solving"
   | "culture_fit"
-  | "follow_up";
+  | "follow_up"
+  | "coding";
 
 export interface InterviewQuestion {
   id: string;

@@ -60,6 +60,7 @@ export default function HomePage() {
         </div>
         <nav className="hidden items-center gap-6 text-sm text-zinc-400 md:flex">
           <Link href="/quick-interview" className="transition hover:text-zinc-100">Quick Interview</Link>
+          <Link href="/coding-interview" className="transition hover:text-zinc-100">Coding Interview</Link>
           <Link href="/upload" className="transition hover:text-zinc-100">Full Interview</Link>
           <Link href="/dashboard" className="transition hover:text-zinc-100">Dashboard</Link>
         </nav>
@@ -118,6 +119,9 @@ export default function HomePage() {
               </svg>
               Quick Interview
             </Button>
+          </Link>
+          <Link href="/coding-interview">
+            <Button variant="secondary" size="lg">Coding Interview</Button>
           </Link>
           <Link href="/upload">
             <Button variant="secondary" size="lg">Full Interview</Button>

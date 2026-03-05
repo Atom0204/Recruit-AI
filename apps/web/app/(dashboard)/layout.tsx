@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 const navLinks = [
   { href: "/dashboard" as const, label: "Dashboard", icon: "◻" },
   { href: "/quick-interview" as const, label: "Quick Interview", icon: "⚡" },
+  { href: "/coding-interview" as const, label: "Coding Interview", icon: "<>" },
   { href: "/upload" as const, label: "New Interview", icon: "+" },
   { href: "/report/demo" as const, label: "Demo Report", icon: "◈" }
 ];
@@ -64,6 +65,7 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
           <div className="hidden text-sm text-zinc-400 md:block">
             {pathname.includes("/interview/") && "Interview Session"}
             {pathname.includes("/quick-interview") && "Quick Interview"}
+            {pathname.includes("/coding-interview") && "Coding Interview"}
             {pathname.includes("/report/") && "Report"}
             {pathname.includes("/upload") && "Upload Resume"}
             {pathname === "/dashboard" && "All Sessions"}
