@@ -1,4 +1,5 @@
 import { randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { NextRequest } from "next/server";
@@ -22,18 +23,66 @@ const SESSION_COOKIE_NAME = "recruitai_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14; // 14 days
 
 const getUserFilePath = (): string => path.join(process.cwd(), ".data", "users.json");
+const getSessionFilePath = (): string => path.join(process.cwd(), ".data", "sessions.json");
 
 const getSessionStore = (): Map<string, AuthSession> => {
-  const key = "__recruitai_auth_sessions__";
   const globalScope = globalThis as typeof globalThis & {
-    [storeKey: string]: Map<string, AuthSession> | undefined;
+    __recruitai_auth_sessions_store__?: Map<string, AuthSession>;
+    __recruitai_auth_sessions_hydrated__?: boolean;
   };
 
-  if (!globalScope[key]) {
-    globalScope[key] = new Map<string, AuthSession>();
+  if (!globalScope.__recruitai_auth_sessions_store__) {
+    globalScope.__recruitai_auth_sessions_store__ = new Map<string, AuthSession>();
   }
 
-  return globalScope[key];
+  if (!globalScope.__recruitai_auth_sessions_hydrated__) {
+    hydrateSessionStore(globalScope.__recruitai_auth_sessions_store__);
+    globalScope.__recruitai_auth_sessions_hydrated__ = true;
+  }
+
+  return globalScope.__recruitai_auth_sessions_store__;
+};
+
+const readSessionsFromDisk = (): AuthSession[] => {
+  const filePath = getSessionFilePath();
+
+  try {
+    const raw = readFileSync(filePath, "utf8");
+    const parsed = JSON.parse(raw) as AuthSession[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const persistSessionStore = (store: Map<string, AuthSession>): void => {
+  const filePath = getSessionFilePath();
+  const activeSessions = Array.from(store.values()).filter((session) => Date.now() <= session.expiresAt);
+
+  mkdirSync(path.dirname(filePath), { recursive: true });
+  writeFileSync(filePath, JSON.stringify(activeSessions, null, 2), "utf8");
+};
+
+const hydrateSessionStore = (store: Map<string, AuthSession>): void => {
+  if (store.size > 0) {
+    return;
+  }
+
+  const sessions = readSessionsFromDisk();
+  const now = Date.now();
+  let hadExpired = false;
+
+  for (const session of sessions) {
+    if (session && session.token && session.userId && typeof session.expiresAt === "number" && session.expiresAt > now) {
+      store.set(session.token, session);
+    } else {
+      hadExpired = true;
+    }
+  }
+
+  if (hadExpired) {
+    persistSessionStore(store);
+  }
 };
 
 const readUsers = async (): Promise<AuthUser[]> => {
@@ -101,14 +150,18 @@ export const loginUser = async (email: string, password: string): Promise<AuthUs
 };
 
 export const createSessionToken = (userId: string): string => {
+  const store = getSessionStore();
   const token = randomUUID();
   const expiresAt = Date.now() + SESSION_TTL_MS;
-  getSessionStore().set(token, { token, userId, expiresAt });
+  store.set(token, { token, userId, expiresAt });
+  persistSessionStore(store);
   return token;
 };
 
 export const destroySessionToken = (token: string): void => {
-  getSessionStore().delete(token);
+  const store = getSessionStore();
+  store.delete(token);
+  persistSessionStore(store);
 };
 
 export const getSessionCookieName = (): string => SESSION_COOKIE_NAME;
@@ -119,13 +172,22 @@ export const getUserIdFromRequest = (request: NextRequest): string | null => {
     return null;
   }
 
-  const session = getSessionStore().get(token);
+  const store = getSessionStore();
+  let session = store.get(token);
+
+  if (!session) {
+    // Re-hydrate if the process restarted and memory store was cold.
+    hydrateSessionStore(store);
+    session = store.get(token);
+  }
+
   if (!session) {
     return null;
   }
 
   if (Date.now() > session.expiresAt) {
-    getSessionStore().delete(token);
+    store.delete(token);
+    persistSessionStore(store);
     return null;
   }
 

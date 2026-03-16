@@ -25,30 +25,45 @@ export function CodingSandbox({
   const [result, setResult] = useState<CodingSessionResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
 
-  const handleRunTests = useCallback(() => {
+  const handleRunTests = useCallback(async () => {
     setIsRunning(true);
-    
-    // Simulate execution
-    setTimeout(() => {
-      const mockResult: CodingSessionResult = {
-        passed: Math.random() > 0.3 ? challenge.testCases.length : 0,
-        failed: Math.random() > 0.3 ? 0 : challenge.testCases.length,
-        executionMs: Math.floor(Math.random() * 1000),
-        details: challenge.testCases.map((tc, idx) => ({
-          caseIndex: idx,
-          passed: Math.random() > 0.3,
-          message: Math.random() > 0.3 ? "✓ Passed" : "✗ Failed",
-          expected: tc.expectedOutput,
-          actual: Math.random() > 0.3 ? tc.expectedOutput : "undefined"
-        })),
-        score: Math.round(Math.random() * 100),
-        feedback: "Good effort! Check edge cases for improvement."
+    setRunError(null);
+
+    try {
+      const response = await fetch("/api/challenges/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code,
+          language: challenge.language,
+          starterCode: challenge.starterCode,
+          testCases: challenge.testCases
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to run tests");
+      }
+
+      const data = (await response.json()) as {
+        result?: CodingSessionResult;
+        error?: string;
       };
-      setResult(mockResult);
+
+      if (!data.result) {
+        throw new Error(data.error || "No execution result returned");
+      }
+
+      setResult(data.result);
+    } catch {
+      setRunError("Could not run tests right now. Please try again.");
+      setResult(null);
+    } finally {
       setIsRunning(false);
-    }, 800);
-  }, [challenge.testCases]);
+    }
+  }, [challenge.language, challenge.starterCode, challenge.testCases, code]);
 
   const handleSubmit = useCallback(() => {
     setIsSubmitted(true);
@@ -84,10 +99,16 @@ export function CodingSandbox({
               {challenge.subtopic || "Coding Challenge"}
             </p>
           </div>
-          <Pill 
-            label={challenge.difficulty.toUpperCase()} 
-            variant={getDifficultyVariant(challenge.difficulty)} 
-          />
+          <div className="flex items-center gap-2">
+            <Pill 
+              label={challenge.language.charAt(0).toUpperCase() + challenge.language.slice(1) === "Cpp" ? "C++" : challenge.language.charAt(0).toUpperCase() + challenge.language.slice(1)}
+              variant="default"
+            />
+            <Pill 
+              label={challenge.difficulty.toUpperCase()} 
+              variant={getDifficultyVariant(challenge.difficulty)} 
+            />
+          </div>
         </div>
 
         {/* Info row */}
@@ -134,6 +155,12 @@ export function CodingSandbox({
       </div>
 
       {/* Results */}
+      {runError && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/[0.08] p-3 text-xs text-red-200">
+          {runError}
+        </div>
+      )}
+
       {result && (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.08] p-4 space-y-3">
           <div className="flex items-center justify-between">

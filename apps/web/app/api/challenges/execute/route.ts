@@ -1,8 +1,11 @@
 import type { CodingSessionResult } from "@recruitai/shared";
 import { NextRequest, NextResponse } from "next/server";
+import { getUserIdFromRequest } from "../../../../lib/auth";
+import { recordCodingAttempt } from "../../../../lib/coding-metrics-store";
 
 interface ExecutionRequest {
   code: string;
+  starterCode?: string;
   language: string;
   testCases: Array<{ input: string; expectedOutput: string }>;
 }
@@ -16,47 +19,100 @@ interface ExecutionRequest {
  */
 export async function POST(req: NextRequest) {
   try {
-    const { code, language, testCases }: ExecutionRequest = await req.json();
+    const userId = getUserIdFromRequest(req);
+    const { code, starterCode, language, testCases }: ExecutionRequest = await req.json();
 
     if (!code || !language || !testCases) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // Mock execution - In production, call external judge service
+    // Lightweight deterministic mock execution until a real judge is integrated.
     const startTime = performance.now();
 
     // Simulate execution delay
-    await new Promise((resolve) => setTimeout(resolve, 500 + Math.random() * 500));
+    await new Promise((resolve) => setTimeout(resolve, 450));
 
     const executionMs = Math.round(performance.now() - startTime);
+    const testCount = testCases.length;
+    const normalizedCode = normalizeCode(code);
+    const normalizedStarterCode = starterCode ? normalizeCode(starterCode) : null;
+    const submittedStarterCode = !!normalizedStarterCode && normalizedCode === normalizedStarterCode;
+    const hasNoMeaningfulCode = !isMeaningfulSubmission(normalizedCode);
 
-    // Mock test results based on code analysis
-    const hasReturnStatement = code.includes("return") || code.includes("return");
+    if (hasNoMeaningfulCode || submittedStarterCode) {
+      const reason = submittedStarterCode
+        ? "Starter template submitted without meaningful changes."
+        : "No executable solution detected. Add your implementation and run tests again.";
+
+      const failedResult: CodingSessionResult = {
+        passed: 0,
+        failed: testCount,
+        executionMs,
+        details: testCases.map((testCase, idx) => ({
+          caseIndex: idx,
+          passed: false,
+          message: `✗ ${reason}`,
+          expected: testCase.expectedOutput,
+          actual: "No output"
+        })),
+        score: 0,
+        feedback: reason
+      };
+
+      if (userId) {
+        recordCodingAttempt({
+          userId,
+          language,
+          passed: failedResult.passed,
+          failed: failedResult.failed,
+          executionMs: failedResult.executionMs,
+          score: failedResult.score ?? 0,
+          createdAt: new Date().toISOString()
+        });
+      }
+
+      return NextResponse.json({ success: true, result: failedResult });
+    }
+
+    // Heuristic pass estimate for mock mode.
+    const hasReturnStatement = /\breturn\b/.test(code) || /\b=>\b/.test(code);
+    const hasFunctionLikeDefinition = /(function\s+\w+|def\s+\w+|fn\s+\w+|class\s+\w+|\w+\s*\([^)]*\)\s*\{|const\s+\w+\s*=\s*\([^)]*\)\s*=>)/.test(code);
     const hasSyntaxError = checkSyntaxError(code);
-    const passed = hasReturnStatement && !hasSyntaxError;
+
+    const signalCount = [hasReturnStatement, hasFunctionLikeDefinition, !hasSyntaxError].filter(Boolean).length;
+    const passedCount = Math.max(1, Math.min(testCount, Math.floor((signalCount / 3) * testCount)));
+    const failedCount = Math.max(0, testCount - passedCount);
 
     const result: CodingSessionResult = {
-      passed: passed ? Math.floor(testCases.length * (0.8 + Math.random() * 0.2)) : 0,
-      failed: passed ? Math.ceil(testCases.length * (0.2 - Math.random() * 0.2)) : testCases.length,
+      passed: hasSyntaxError ? 0 : passedCount,
+      failed: hasSyntaxError ? testCount : failedCount,
       executionMs,
       details: testCases.map((testCase, idx) => ({
         caseIndex: idx,
-        passed: passed && Math.random() > 0.3,
-        message: passed && Math.random() > 0.3 ? "✓ Test passed" : "✗ Test failed",
+        passed: !hasSyntaxError && idx < passedCount,
+        message: !hasSyntaxError && idx < passedCount ? "✓ Test passed" : "✗ Test failed",
         expected: testCase.expectedOutput,
-        actual: passed ? testCase.expectedOutput : "undefined or error"
+        actual: !hasSyntaxError && idx < passedCount ? testCase.expectedOutput : "undefined or error"
       })),
-      score: passed ? Math.round(80 + Math.random() * 20) : Math.round(Math.random() * 50),
-      feedback: passed
-        ? "Good solution! Consider optimizing for edge cases and performance."
-        : "Code execution failed. Please review syntax and logic."
+      score: hasSyntaxError ? 20 : Math.round((passedCount / Math.max(1, testCount)) * 100),
+      feedback: hasSyntaxError
+        ? "Code execution failed due to syntax issues."
+        : "Partial mock evaluation complete. Integrate a real judge for exact correctness checks."
     };
 
-    return NextResponse.json({
-      success: true,
-      result,
-      warning: "This is a mock execution. In production, integrate with Judge0 or similar."
-    });
+    if (userId) {
+      recordCodingAttempt({
+        userId,
+        language,
+        passed: result.passed,
+        failed: result.failed,
+        executionMs: result.executionMs,
+        score: result.score ?? 0,
+        createdAt: new Date().toISOString()
+      });
+    }
+
+    return NextResponse.json({ success: true, result });
   } catch (error) {
     console.error("Code execution error:", error);
     return NextResponse.json(
@@ -82,4 +138,29 @@ function checkSyntaxError(code: string): boolean {
   ];
 
   return issues.some((issue) => issue !== null);
+}
+
+function normalizeCode(code: string): string {
+  return code
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "")
+    .replace(/^\s*#.*$/gm, "")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+function isMeaningfulSubmission(normalizedCode: string): boolean {
+  if (!normalizedCode) return false;
+  if (normalizedCode.length < 24) return false;
+
+  const placeholders = [
+    "returnnull;",
+    "returnNone",
+    "returnundefined;",
+    "pass",
+    "TODO",
+    "//TODO"
+  ];
+
+  return !placeholders.some((token) => normalizedCode.includes(token.replace(/\s+/g, "")));
 }

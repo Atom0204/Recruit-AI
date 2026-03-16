@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ParsedResume, ShadowJobDescription } from "@recruitai/shared";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "../ui/button";
@@ -10,6 +10,8 @@ import { Card } from "../ui/card";
 import { Pill } from "../ui/pill";
 
 type Step = "idle" | "parsing" | "parsed" | "jd";
+
+const WORKFLOW_STATE_KEY = "recruitai.upload.workflow.v1";
 
 const steps = [
   { key: "upload", label: "Upload" },
@@ -36,6 +38,42 @@ export function UploadWorkflow() {
   const [isStartingInterview, setIsStartingInterview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      const raw = window.localStorage.getItem(WORKFLOW_STATE_KEY);
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw) as {
+        step?: Step;
+        resume?: ParsedResume;
+        shadowJd?: ShadowJobDescription;
+      };
+
+      if (parsed.resume) setResume(parsed.resume);
+      if (parsed.shadowJd) setShadowJd(parsed.shadowJd);
+
+      if (parsed.step && parsed.step !== "parsing") {
+        setStep(parsed.step);
+      }
+    } catch {
+      // Ignore invalid persisted state.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const payload = {
+      step,
+      resume,
+      shadowJd
+    };
+
+    window.localStorage.setItem(WORKFLOW_STATE_KEY, JSON.stringify(payload));
+  }, [resume, shadowJd, step]);
 
   const activeStep = stepIndex(step);
 
@@ -79,21 +117,35 @@ export function UploadWorkflow() {
     setIsStartingInterview(true);
     setError(null);
 
-    const response = await fetch("/api/start-interview", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ resume, shadowJd })
-    });
+    try {
+      const response = await fetch("/api/start-interview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resume, shadowJd })
+      });
 
-    if (!response.ok) {
-      setError("Unable to start interview session.");
+      if (!response.ok) {
+        if (response.status === 401) {
+          setError("Your login session expired. Please log in again, then click Start Interview again.");
+          return;
+        }
+
+        const failure = (await response.json().catch(() => ({ error: "Unable to start interview session." }))) as {
+          error?: string;
+        };
+        setError(failure.error || "Unable to start interview session.");
+        return;
+      }
+
+      const payload: { interview: { id: string } } = await response.json();
+      setInterviewId(payload.interview.id);
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(WORKFLOW_STATE_KEY);
+      }
+      router.push(`/interview/${payload.interview.id}`);
+    } finally {
       setIsStartingInterview(false);
-      return;
     }
-
-    const payload: { interview: { id: string } } = await response.json();
-    setInterviewId(payload.interview.id);
-    router.push(`/interview/${payload.interview.id}`);
   };
 
   const handleDrop = (e: React.DragEvent) => {

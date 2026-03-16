@@ -1,6 +1,6 @@
 "use client";
 
-import type { CodingChallenge, CodingSessionResult, DifficultyLevel } from "@recruitai/shared";
+import type { CodingChallenge, CodingLanguage, CodingSessionResult, DifficultyLevel } from "@recruitai/shared";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCallback, useMemo, useState } from "react";
 import { CodingSandbox } from "../../../components/interview/coding-sandbox";
@@ -9,22 +9,36 @@ import { Card } from "../../../components/ui/card";
 
 type Phase = "setup" | "loading" | "sandbox" | "done";
 
-const DSA_TOPICS = [
-  "DSA",
-  "Arrays",
-  "Strings",
-  "Trees",
-  "Graphs",
-  "Dynamic Programming",
-  "Sorting"
-] as const;
+const DSA_TOPICS = {
+  "Data Structures": [
+    "Arrays & Strings",
+    "Linked Lists",
+    "Stacks & Queues",
+    "Trees",
+    "Graphs",
+    "Heaps & Priority Queues",
+    "Hash Tables"
+  ],
+  "Algorithms": [
+    "Sorting & Searching",
+    "Dynamic Programming",
+    "Greedy Algorithms",
+    "Backtracking",
+    "Recursion",
+    "Bit Manipulation",
+    "Two Pointers & Sliding Window"
+  ]
+} as const;
 
 const DIFFICULTIES: DifficultyLevel[] = ["easy", "medium", "hard"];
 
+const LANGUAGES: CodingLanguage[] = ["typescript", "javascript", "python", "cpp", "rust"];
+
 export default function CodingInterviewPage() {
   const [phase, setPhase] = useState<Phase>("setup");
-  const [topic, setTopic] = useState<string>("DSA");
+  const [topic, setTopic] = useState<string>("Arrays & Strings");
   const [difficulty, setDifficulty] = useState<DifficultyLevel>("medium");
+  const [language, setLanguage] = useState<CodingLanguage>("typescript");
   const [challenge, setChallenge] = useState<CodingChallenge | null>(null);
   const [result, setResult] = useState<CodingSessionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +57,7 @@ export default function CodingInterviewPage() {
       const response = await fetch("/api/coding-interview/challenge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, difficulty })
+        body: JSON.stringify({ topic, difficulty, language })
       });
 
       if (!response.ok) {
@@ -58,7 +72,7 @@ export default function CodingInterviewPage() {
       setError("Unable to generate challenge right now. Please try again.");
       setPhase("setup");
     }
-  }, [topic, difficulty]);
+  }, [topic, difficulty, language]);
 
   const onComplete = useCallback((sessionResult: CodingSessionResult) => {
     setResult(sessionResult);
@@ -89,22 +103,22 @@ export default function CodingInterviewPage() {
           >
             <Card className="space-y-5">
               <div className="space-y-2">
-                <p className="text-sm font-medium text-zinc-200">Choose DSA Topic</p>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                  {DSA_TOPICS.map((item) => (
-                    <button
-                      key={item}
-                      onClick={() => setTopic(item)}
-                      className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
-                        topic === item
-                          ? "border-indigo-400/50 bg-indigo-500/15 text-indigo-100"
-                          : "border-white/10 bg-white/[0.02] text-zinc-400 hover:border-white/20 hover:text-zinc-200"
-                      }`}
-                    >
-                      {item}
-                    </button>
+                <p className="text-sm font-medium text-zinc-200">Choose Topic</p>
+                <select
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  className="w-full rounded-xl border border-indigo-400/50 bg-zinc-900/80 px-4 py-3 text-sm text-zinc-100 outline-none ring-2 ring-indigo-500/20 transition hover:border-indigo-400/70 focus:border-indigo-400 focus:ring-indigo-500/40"
+                >
+                  {Object.entries(DSA_TOPICS).map(([category, topics]) => (
+                    <optgroup key={category} label={category} className="bg-zinc-800 text-zinc-300 font-medium">
+                      {topics.map((item) => (
+                        <option key={item} value={item} className="bg-zinc-900 text-zinc-100 py-2">
+                          {item}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
-                </div>
+                </select>
               </div>
 
               <div className="space-y-2">
@@ -126,6 +140,25 @@ export default function CodingInterviewPage() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-zinc-200">Choose Language</p>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                  {LANGUAGES.map((lang) => (
+                    <button
+                      key={lang}
+                      onClick={() => setLanguage(lang)}
+                      className={`rounded-xl border px-3 py-2 text-sm capitalize transition ${
+                        language === lang
+                          ? "border-indigo-400/50 bg-indigo-500/15 text-indigo-100"
+                          : "border-white/10 bg-white/[0.02] text-zinc-400 hover:border-white/20 hover:text-zinc-200"
+                      }`}
+                    >
+                      {lang === "cpp" ? "C++" : lang === "typescript" ? "TypeScript" : lang.charAt(0).toUpperCase() + lang.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {error && (
                 <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
                   {error}
@@ -134,7 +167,7 @@ export default function CodingInterviewPage() {
 
               <div className="flex flex-wrap gap-3">
                 <Button onClick={loadChallenge}>Start Coding Round</Button>
-                <Button variant="secondary" onClick={() => { setTopic("DSA"); setDifficulty("medium"); }}>
+                <Button variant="secondary" onClick={() => { setTopic("Arrays & Strings"); setDifficulty("medium"); setLanguage("typescript"); }}>
                   Reset Choices
                 </Button>
               </div>

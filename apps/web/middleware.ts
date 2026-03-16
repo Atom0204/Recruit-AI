@@ -14,18 +14,21 @@ const protectedPrefixes = [
 export function middleware(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  const hasToken = !!token;
 
   const isAuthApi = pathname.startsWith("/api/auth");
   const isProtectedPage = protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(prefix + "/"));
   const isProtectedApi = pathname.startsWith("/api/") && !isAuthApi && !pathname.startsWith("/api/webhooks");
 
-  if (pathname === "/login" && token) {
+  // Redirect logged-in users from login page or root to dashboard
+  if ((pathname === "/login" || pathname === "/") && hasToken) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 
-  if ((isProtectedPage || isProtectedApi) && !token) {
+  // Redirect unauthenticated users to login
+  if ((isProtectedPage || isProtectedApi) && !hasToken) {
     if (isProtectedApi) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

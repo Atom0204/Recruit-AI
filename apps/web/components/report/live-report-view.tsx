@@ -11,7 +11,7 @@ import { TranscriptPanel } from "./transcript-panel";
 
 interface LiveReportViewProps {
   interviewId: string;
-  fallbackReport: CandidateFitReport;
+  fallbackReport?: CandidateFitReport;
 }
 
 type ReportResponse =
@@ -97,6 +97,7 @@ export function LiveReportView({ interviewId, fallbackReport }: LiveReportViewPr
   const [reportData, setReportData] = useState<CandidateFitReport | null>(null);
   const [reportReadyAt, setReportReadyAt] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,7 +105,14 @@ export function LiveReportView({ interviewId, fallbackReport }: LiveReportViewPr
     const load = async () => {
       const response = await fetch(`/api/report/${interviewId}`, { cache: "no-store" });
       if (!response.ok) {
-        if (!cancelled) { setIsProcessing(false); setReportData(fallbackReport); }
+        if (!cancelled) { 
+          setIsProcessing(false);
+          if (fallbackReport) {
+            setReportData(fallbackReport);
+          } else {
+            setNotFound(true);
+          }
+        }
         return;
       }
 
@@ -115,6 +123,7 @@ export function LiveReportView({ interviewId, fallbackReport }: LiveReportViewPr
         setReportData(payload.report);
         setReportReadyAt(payload.reportReadyAt);
         setIsProcessing(false);
+        setNotFound(false);
         return;
       }
 
@@ -136,6 +145,23 @@ export function LiveReportView({ interviewId, fallbackReport }: LiveReportViewPr
   }, [reportReadyAt]);
 
   const report = reportData ?? fallbackReport;
+
+  if (notFound || (!isProcessing && !report)) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center py-16">
+        <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10">
+          <svg className="h-8 w-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+          </svg>
+        </div>
+        <h2 className="text-xl font-semibold text-zinc-100">Report Not Found</h2>
+        <p className="mt-2 text-sm text-zinc-400">This interview report doesn't exist or you don't have access to it.</p>
+        <Link href="/dashboard" className="mt-6">
+          <Button variant="secondary" size="sm">Back to Dashboard</Button>
+        </Link>
+      </motion.div>
+    );
+  }
 
   if (isProcessing && !reportData) {
     return <ProcessingState etaLabel={etaLabel} />;

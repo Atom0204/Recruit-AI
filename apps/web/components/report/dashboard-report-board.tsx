@@ -16,6 +16,16 @@ interface DashboardItem {
   verdict?: string;
 }
 
+interface CodingMetrics {
+  totalAttempts: number;
+  totalPassed: number;
+  totalFailed: number;
+  avgScore: number;
+  bestScore: number;
+  avgExecutionMs: number;
+  lastAttemptAt?: string;
+}
+
 const statusConfig = {
   in_progress: { label: "In Progress", dot: "status-dot-warning", bg: "bg-amber-500/10 text-amber-300 border-amber-400/20" },
   processing: { label: "Processing", dot: "status-dot-live", bg: "bg-indigo-500/10 text-indigo-300 border-indigo-400/20" },
@@ -24,6 +34,7 @@ const statusConfig = {
 
 export function DashboardReportBoard() {
   const [items, setItems] = useState<DashboardItem[]>([]);
+  const [codingMetrics, setCodingMetrics] = useState<CodingMetrics | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,8 +42,11 @@ export function DashboardReportBoard() {
     const load = async () => {
       const response = await fetch("/api/dashboard/reports", { cache: "no-store" });
       if (!response.ok || cancelled) return;
-      const payload = (await response.json()) as { items: DashboardItem[] };
-      if (!cancelled) setItems(payload.items);
+      const payload = (await response.json()) as { items: DashboardItem[]; codingMetrics?: CodingMetrics };
+      if (!cancelled) {
+        setItems(payload.items);
+        setCodingMetrics(payload.codingMetrics ?? null);
+      }
     };
 
     void load();
@@ -57,6 +71,42 @@ export function DashboardReportBoard() {
           </Button>
         </Link>
       </div>
+
+      {/* Coding performance metrics */}
+      {codingMetrics && (
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3">
+            <p className="text-[10px] uppercase tracking-wider text-zinc-500">Coding Attempts</p>
+            <p className="mt-1 text-xl font-semibold text-zinc-100">{codingMetrics.totalAttempts}</p>
+            <p className="mt-1 text-[11px] text-zinc-500">Last: {codingMetrics.lastAttemptAt ? new Date(codingMetrics.lastAttemptAt).toLocaleDateString() : "-"}</p>
+          </div>
+
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3">
+            <p className="text-[10px] uppercase tracking-wider text-zinc-500">Test Pass Rate</p>
+            <p className="mt-1 text-xl font-semibold text-emerald-300">
+              {codingMetrics.totalPassed + codingMetrics.totalFailed > 0
+                ? Math.round((codingMetrics.totalPassed / (codingMetrics.totalPassed + codingMetrics.totalFailed)) * 100)
+                : 0}
+              %
+            </p>
+            <p className="mt-1 text-[11px] text-zinc-500">
+              {codingMetrics.totalPassed} passed / {codingMetrics.totalFailed} failed
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3">
+            <p className="text-[10px] uppercase tracking-wider text-zinc-500">Average Score</p>
+            <p className="mt-1 text-xl font-semibold text-indigo-300">{codingMetrics.avgScore}</p>
+            <p className="mt-1 text-[11px] text-zinc-500">Best: {codingMetrics.bestScore}</p>
+          </div>
+
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3">
+            <p className="text-[10px] uppercase tracking-wider text-zinc-500">Avg Execution</p>
+            <p className="mt-1 text-xl font-semibold text-amber-300">{codingMetrics.avgExecutionMs}ms</p>
+            <p className="mt-1 text-[11px] text-zinc-500">From test runs</p>
+          </div>
+        </div>
+      )}
 
       {/* Empty state */}
       {items.length === 0 && (

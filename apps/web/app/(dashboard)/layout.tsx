@@ -10,8 +10,7 @@ const navLinks = [
   { href: "/dashboard" as const, label: "Dashboard", icon: "◻" },
   { href: "/quick-interview" as const, label: "Quick Interview", icon: "⚡" },
   { href: "/coding-interview" as const, label: "Coding Interview", icon: "<>" },
-  { href: "/upload" as const, label: "New Interview", icon: "+" },
-  { href: "/report/demo" as const, label: "Demo Report", icon: "◈" }
+  { href: "/upload" as const, label: "New Interview", icon: "+" }
 ];
 
 export default function DashboardLayout({ children }: PropsWithChildren) {

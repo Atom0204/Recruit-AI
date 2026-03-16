@@ -1,4 +1,4 @@
-import type { DifficultyLevel, CodingChallenge } from "@recruitai/shared";
+import type { DifficultyLevel, CodingChallenge, CodingLanguage } from "@recruitai/shared";
 import { buildCodingChallengePrompt } from "@recruitai/ai-service";
 import { geminiModel } from "../../../../lib/gemini";
 import { NextResponse } from "next/server";
@@ -6,7 +6,8 @@ import { z } from "zod";
 
 const requestSchema = z.object({
   topic: z.string().min(1).max(60),
-  difficulty: z.enum(["easy", "medium", "hard"]).default("medium")
+  difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
+  language: z.enum(["typescript", "javascript", "python", "java", "cpp", "rust", "go", "csharp"]).default("typescript")
 });
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -21,10 +22,10 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
-    const { topic, difficulty } = parsed.data;
+    const { topic, difficulty, language } = parsed.data;
 
-    // Build the prompt for Gemini
-    const prompt = buildCodingChallengePrompt(topic, difficulty as DifficultyLevel);
+    // Build the prompt for Gemini, including language specification
+    const prompt = buildCodingChallengePrompt(topic, difficulty as DifficultyLevel, language as CodingLanguage);
 
     // Call Gemini to generate the challenge
     const result = await geminiModel.generateContent(prompt);
@@ -45,7 +46,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       description: challengeData.description || "Solve this problem",
       category: challengeData.category || "algorithm",
       difficulty: difficulty as DifficultyLevel,
-      language: challengeData.language || "typescript",
+      language: language,
       starterCode: challengeData.starterCode || "export function solve(input: any): any {\n  return null;\n}",
       testCases: (challengeData.testCases || []).map((tc: any) => ({
         input: tc.input || "",

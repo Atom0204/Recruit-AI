@@ -17,6 +17,8 @@ interface InterviewRoomProps {
   questions: InterviewQuestion[];
 }
 
+type InputMode = "voice" | "write" | "hybrid";
+
 type BrowserSpeechRecognition = {
   continuous: boolean;
   interimResults: boolean;
@@ -125,6 +127,7 @@ export function InterviewRoom({ interviewId, candidateName, role, questions }: I
   const [fatalViolation, setFatalViolation] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [voicesReady, setVoicesReady] = useState(false);
+  const [inputMode, setInputMode] = useState<InputMode>("hybrid");
   const [codingChallenges, setCodingChallenges] = useState<CodingChallenge[]>([]);
   const { elapsedSeconds, remainingSeconds } = useInterviewTimer(45 * 60);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
@@ -201,20 +204,6 @@ export function InterviewRoom({ interviewId, candidateName, role, questions }: I
     return () => syn.removeEventListener("voiceschanged", check);
   }, []);
 
-  // Called from the "Begin" button — runs inside a click handler so
-  // the browser treats speechSynthesis.speak() as user-initiated.
-  const beginInterview = useCallback(() => {
-    setHasStarted(true);
-    // Tiny warm-up utterance (silent) to unlock the speech engine
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      const warmup = new SpeechSynthesisUtterance("");
-      warmup.volume = 0;
-      window.speechSynthesis.speak(warmup);
-    }
-    // Short delay so the warm-up registers before real speech
-    setTimeout(() => askCurrentQuestion(), 300);
-  }, [askCurrentQuestion]);
-
   useEffect(() => {
     if (typeof window === "undefined") return;
     const RecognitionClass = window.SpeechRecognition ?? window.webkitSpeechRecognition;
@@ -240,6 +229,58 @@ export function InterviewRoom({ interviewId, candidateName, role, questions }: I
       recognitionRef.current = null;
     };
   }, []);
+
+  const stopListening = useCallback(() => {
+    const recognition = recognitionRef.current;
+    if (!recognition) return;
+    recognition.stop();
+    setIsListening(false);
+  }, []);
+
+  const startListening = useCallback(() => {
+    const recognition = recognitionRef.current;
+    if (!recognition) return false;
+
+    try {
+      recognition.start();
+      setIsListening(true);
+      return true;
+    } catch {
+      setIsListening(false);
+      return false;
+    }
+  }, []);
+
+  const switchInputMode = useCallback((mode: InputMode) => {
+    setInputMode(mode);
+    if (mode === "write") {
+      stopListening();
+    }
+  }, [stopListening]);
+
+  // Called from the "Begin" button — runs inside a click handler so
+  // the browser treats speechSynthesis.speak() as user-initiated.
+  const beginInterview = useCallback((mode: InputMode = "hybrid") => {
+    setHasStarted(true);
+    setInputMode(mode);
+
+    // Tiny warm-up utterance (silent) to unlock the speech engine
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      const warmup = new SpeechSynthesisUtterance("");
+      warmup.volume = 0;
+      window.speechSynthesis.speak(warmup);
+    }
+
+    // Short delay so the warm-up registers before real speech
+    setTimeout(() => {
+      askCurrentQuestion();
+      if (mode !== "write") {
+        setTimeout(() => {
+          startListening();
+        }, 450);
+      }
+    }, 300);
+  }, [askCurrentQuestion, startListening]);
 
   // Anti-cheat listeners
   const logViolation = useCallback((details: string) => {
@@ -283,13 +324,13 @@ export function InterviewRoom({ interviewId, candidateName, role, questions }: I
     };
   }, [fatalViolation, logViolation]);
 
-  const toggleListening = () => {
-    const recognition = recognitionRef.current;
-    if (!recognition) return;
-    if (isListening) { recognition.stop(); setIsListening(false); return; }
-    recognition.start();
-    setIsListening(true);
-  };
+  const toggleListening = useCallback(() => {
+    if (isListening) {
+      stopListening();
+      return;
+    }
+    startListening();
+  }, [isListening, startListening, stopListening]);
 
   const submitAnswer = () => {
     const text = candidateDraft.trim();
@@ -309,9 +350,8 @@ export function InterviewRoom({ interviewId, candidateName, role, questions }: I
     setCandidateDraft("");
 
     // Stop listening if active
-    if (isListening && recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsListening(false);
+    if (isListening) {
+      stopListening();
     }
 
     const decision = decideBranch(buildState(questions, currentQuestionIndex, nextResponses), response);
@@ -398,12 +438,22 @@ export function InterviewRoom({ interviewId, candidateName, role, questions }: I
             <li className="flex items-center gap-2"><span className="text-emerald-400">●</span> Speak clearly; the AI interviewer will listen</li>
           </ul>
 
-          <button
-            onClick={beginInterview}
-            className="mt-2 w-full rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-400 px-6 py-3 text-sm font-semibold text-white shadow-glow transition hover:brightness-110 active:scale-[0.98]"
-          >
-            {voicesReady ? "Begin Interview" : "Loading voices…"}
-          </button>
+          <div className="mt-2 grid w-full gap-2 sm:grid-cols-2">
+            <button
+              onClick={() => beginInterview("voice")}
+              className="rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-400 px-6 py-3 text-sm font-semibold text-white shadow-glow transition hover:brightness-110 active:scale-[0.98]"
+            >
+              {voicesReady ? "Start Voice" : "Start Voice (Loading…)"}
+            </button>
+            <button
+              onClick={() => beginInterview("write")}
+              className="rounded-xl border border-white/[0.12] bg-white/[0.03] px-6 py-3 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.08]"
+            >
+              Start Writing
+            </button>
+          </div>
+
+          <p className="text-[10px] text-zinc-500">You can switch between voice and writing anytime.</p>
 
           <p className="text-[10px] text-zinc-500">Candidate: {candidateName}</p>
         </motion.div>
@@ -499,15 +549,42 @@ export function InterviewRoom({ interviewId, candidateName, role, questions }: I
 
           {/* Control bar — Zoom-style bottom strip */}
           <div className="flex shrink-0 items-center justify-center gap-2 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+            <div className="mr-1 inline-flex rounded-full border border-white/[0.08] bg-white/[0.03] p-1">
+              <button
+                onClick={() => switchInputMode("voice")}
+                className={`rounded-full px-2.5 py-1 text-[11px] transition ${
+                  inputMode === "voice" ? "bg-indigo-500/25 text-indigo-200" : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                Voice
+              </button>
+              <button
+                onClick={() => switchInputMode("write")}
+                className={`rounded-full px-2.5 py-1 text-[11px] transition ${
+                  inputMode === "write" ? "bg-indigo-500/25 text-indigo-200" : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                Write
+              </button>
+              <button
+                onClick={() => switchInputMode("hybrid")}
+                className={`rounded-full px-2.5 py-1 text-[11px] transition ${
+                  inputMode === "hybrid" ? "bg-indigo-500/25 text-indigo-200" : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                Hybrid
+              </button>
+            </div>
+
             <button
               onClick={toggleListening}
-              disabled={fatalViolation}
+              disabled={fatalViolation || inputMode === "write"}
               className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
                 isListening
                   ? "bg-emerald-500 text-white shadow-glow-success pulse-ring relative"
                   : "bg-white/[0.06] text-zinc-300 hover:bg-white/[0.1]"
               } disabled:opacity-30`}
-              title={isListening ? "Stop recording" : "Start recording"}
+              title={inputMode === "write" ? "Voice disabled in Write mode" : isListening ? "Stop recording" : "Start recording"}
             >
               <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
@@ -633,7 +710,13 @@ export function InterviewRoom({ interviewId, candidateName, role, questions }: I
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitAnswer(); }
                     }}
-                    placeholder={isListening ? "Listening to your voice..." : "Type your answer or use voice..."}
+                    placeholder={
+                      inputMode === "write"
+                        ? "Type your answer..."
+                        : isListening
+                          ? "Listening to your voice..."
+                          : "Type your answer or use voice..."
+                    }
                     className="h-20 w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 pr-10 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-500 focus:border-indigo-500/40 focus:ring-1 focus:ring-indigo-500/20"
                   />
                   {isListening && (
@@ -651,6 +734,42 @@ export function InterviewRoom({ interviewId, candidateName, role, questions }: I
           )}
         </div>
       </div>
+
+      {/* Mobile writing panel */}
+      {(currentQuestion?.type !== "coding") && (
+        <div className="shrink-0 border-t border-white/[0.06] bg-white/[0.01] p-3 lg:hidden">
+          <p className="text-[10px] uppercase tracking-wider text-indigo-400">Current Question</p>
+          <p className="mt-1 text-sm text-zinc-200">{currentQuestion?.prompt ?? "No question available."}</p>
+
+          <textarea
+            value={candidateDraft}
+            onChange={(e) => setCandidateDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submitAnswer();
+              }
+            }}
+            placeholder={
+              inputMode === "write"
+                ? "Type your answer..."
+                : isListening
+                  ? "Listening to your voice..."
+                  : "Type your answer or use voice..."
+            }
+            className="mt-2 h-24 w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-500 focus:border-indigo-500/40 focus:ring-1 focus:ring-indigo-500/20"
+          />
+
+          <div className="mt-2 flex items-center gap-2">
+            <Button size="sm" onClick={submitAnswer} disabled={!candidateDraft.trim() || fatalViolation}>
+              Submit Answer
+            </Button>
+            <Button size="sm" variant="secondary" onClick={askCurrentQuestion}>
+              Replay Question
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Integrity lock overlay */}
       <AnimatePresence>

@@ -1,4 +1,4 @@
-import type { CodingChallenge, DifficultyLevel, ResumeSkilledChallenge } from "@recruitai/shared";
+import type { CodingChallenge, DifficultyLevel, ResumeSkilledChallenge, CodingLanguage } from "@recruitai/shared";
 import type { ParsedResume } from "@recruitai/shared";
 
 /* ─────────────────────────────────────────────────────────────────
@@ -349,26 +349,48 @@ export function buildCodingInterviewScript(resume: ParsedResume): CodingChalleng
  * Generate a coding challenge prompt for Gemini
  * Returns the prompt string that will be sent to Gemini API
  */
-export function buildCodingChallengePrompt(topic: string, difficulty: DifficultyLevel): string {
+export function buildCodingChallengePrompt(topic: string, difficulty: DifficultyLevel, language?: CodingLanguage): string {
   const difficultyDesc = {
     easy: "basic fundamentals, single concept, 1-2 operations",
     medium: "intermediate concepts, some edge cases, multiple operations",
     hard: "advanced algorithms, optimization focus, complex logic"
   };
 
-  return `You are an expert programming instructor. Generate a single DSA (Data Structures & Algorithms) coding challenge.
+  const selectedLanguage = language || "typescript";
+  const languageDesc = language ? `in ${language.toUpperCase()}` : "";
+  
+  // Get starter code template based on language
+  const getStarterTemplate = (lang: string): string => {
+    const defaultTemplate = "export function solve(input: any): any {\\n  return null;\\n}";
+    const templates: Record<string, string> = {
+      typescript: defaultTemplate,
+      javascript: "function solve(input) {\\n  return null;\\n}\\nmodule.exports = solve;",
+      python: "def solve(input):\\n    return None",
+      cpp: "#include <vector>\\nusing namespace std;\\n\\nint main() {\\n  return 0;\\n}",
+      rust: "fn solve(input: &str) -> String {\\n  String::new()\\n}\\n\\nfn main() {}",
+      java: "public class Solution {\\n  public static Object solve(String input) {\\n    return null;\\n  }\\n}",
+      go: "package main\\n\\nfunc Solve(input string) interface{} {\\n  return nil\\n}",
+      csharp: "public class Solution {\\n  public static object Solve(string input) {\\n    return null;\\n  }\\n}"
+    };
+    return templates[lang.toLowerCase()] ?? defaultTemplate;
+  };
+
+  const starterTemplate = getStarterTemplate(selectedLanguage);
+
+  return `You are an expert programming instructor. Generate a single DSA (Data Structures & Algorithms) coding challenge ${languageDesc}.
 
 Topic: ${topic}
 Difficulty: ${difficulty} (${difficultyDesc[difficulty]})
+Language: ${selectedLanguage}
 
 Return ONLY valid JSON (no markdown, no extra text) with this exact structure:
 {
   "prompt": "Brief problem title (max 80 chars)",
   "description": "Detailed problem description (2-3 sentences explaining what to implement)",
   "category": "arrays|strings|trees|graphs|dp|sorting|algorithm|system_design|database|web",
-  "language": "typescript",
+  "language": "${selectedLanguage}",
   "subtopic": "Specific algorithm/technique being tested",
-  "starterCode": "export function solve(input: any): any {\\n  return null;\\n}",
+  "starterCode": "${starterTemplate.replace(/"/g, '\\"')}",
   "testCases": [
     {
       "input": "example input value",
@@ -385,5 +407,5 @@ Return ONLY valid JSON (no markdown, no extra text) with this exact structure:
   }
 }
 
-Generate a fresh, original problem fitting the ${difficulty} level and ${topic} topic.`;
+Generate a fresh, original problem fitting the ${difficulty} level and ${topic} topic. IMPORTANT: Use ${selectedLanguage} syntax for the starterCode.`;
 }
